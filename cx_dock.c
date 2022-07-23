@@ -305,6 +305,58 @@ static void setup_shared_memory_for_rw_pixels() {
 
 }
 
+const float light_dir[] = {1,1,1,0};
+const float light_color[] = {1,0.95,0.9,1};
+static void render_one_frame() {
+  glViewport(0,0,win_w,win_h);
+
+  /* Clear the screen */
+  // glClearColor(0.750,0.750,1.0,0.5);
+  glClearColor(0.0, 0.0, 0.0, 0.0);
+  glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+
+
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glDisable(GL_CULL_FACE);
+
+  glLightfv(GL_LIGHT0, GL_POSITION, light_dir);
+  glLightfv(GL_LIGHT0, GL_DIFFUSE, light_color);
+
+
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHTING);
+  
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  //gluPerspective(45, (float)win_w/(float)win_h, 1, 10);
+
+  glOrtho(0, win_w, 0, win_h, 0, 1); // Set coordinate system
+
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+
+  GLfloat polygon_verticies[] = {
+    20, 100, 0,
+    100, 100, 0,
+    500, 50, 0,
+    320, 10, 0,
+    40, 40, 0
+  };
+
+  glEnableClientState(GL_VERTEX_ARRAY);
+
+  glVertexPointer(3 /* how many dimensions? */, GL_FLOAT, 0, polygon_verticies);
+
+  glDrawArrays(GL_POLYGON, 0, 5 /* len of polygon_verticies / dimensions */);
+
+  glDisableClientState(GL_VERTEX_ARRAY);
+
+
+  /* Swapbuffers */
+  glXSwapBuffers(Xdisplay, GLXWindowHandle);
+}
+
 static volatile bool exit_flag;
 static void do_render_loop() {
   exit_flag = false;
@@ -315,9 +367,6 @@ static void do_render_loop() {
   XEvent event;
   XConfigureEvent *xc;
   bool window_moved_by_user = false;
-
-  float const light_dir[]={1,1,1,0};
-  float const light_color[]={1,0.95,0.9,1};
 
   while (!exit_flag) {
     // Book keeping
@@ -351,50 +400,7 @@ static void do_render_loop() {
     }
 
     // Re-draw window using GL commands
-    {
-      int size;
-      static float a=0;
-      static float b=0;
-      static float c=0;
-
-      glViewport(0,0,win_w,win_h);
-
-      /* Clear the screen */
-      // glClearColor(0.750,0.750,1.0,0.5);
-      glClearColor(0.0,0.0,0.0,0.);
-      glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-
-      glMatrixMode(GL_PROJECTION);
-      glLoadIdentity();
-      gluPerspective(45, (float)win_w/(float)win_h, 1, 10);
-
-      glMatrixMode(GL_MODELVIEW);
-      glLoadIdentity();
-
-
-      glEnable(GL_DEPTH_TEST);
-      glDisable(GL_CULL_FACE);
-
-      glLightfv(GL_LIGHT0, GL_POSITION, light_dir);
-      glLightfv(GL_LIGHT0, GL_DIFFUSE, light_color);
-
-      glTranslatef(0,0,-5);
-
-      glRotatef(a, 1, 0, 0);
-      glRotatef(b, 0, 1, 0);
-      glRotatef(c, 0, 0, 1);
-
-      glEnable(GL_LIGHT0);
-      glEnable(GL_LIGHTING);
-      glutSolidTeapot(1);
-
-      a=fmod(a+0.1, 360.);
-      b=fmod(b+0.5, 360.);
-      c=fmod(c+0.25, 360.);
-
-      /* Swapbuffers */
-      glXSwapBuffers(Xdisplay, GLXWindowHandle);
-    }
+    render_one_frame();
 
   }
   printf("\nExiting render loop...\n");
