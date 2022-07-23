@@ -24,6 +24,10 @@
   datenwolf
 
 ------------------------------------------------------------------------*/
+
+#define MONITOR_WIDTH 1920
+#define MONITOR_HEIGHT 1080
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -103,6 +107,11 @@ static void print_i3_wm_warnings() {
     // TODO search for that string & print warning
 }
 
+static void ensure_compositor_running() {
+    printf("TODO improve compositor check; currently we just fork compton if not running");
+    system("pgrep compton || (i3-msg exec compton && echo Used i3-exec to spawn compton) || ( ( compton & ) & echo Double-forked compton ) ");
+}
+
 static void createTheWindow()
 {
     XEvent event;
@@ -114,6 +123,7 @@ static void createTheWindow()
     static char *title = "cx-dock";
 
     print_i3_wm_warnings();
+    ensure_compositor_running();
 
     /* Connect to the X server */
     Xdisplay = XOpenDisplay(NULL);
@@ -243,8 +253,6 @@ static void createTheWindow()
         XSetClassHint(Xdisplay, WindowHandle, class_hint);
     }
 
-    
-
 #undef SET_ATOM_STR
 #undef SET_ATOM_ATOM
 
@@ -260,6 +268,31 @@ static void createTheWindow()
     if ((del_atom = XInternAtom(Xdisplay, "WM_DELETE_WINDOW", 0)) != None) {
         XSetWMProtocols(Xdisplay, WindowHandle, &del_atom, 1);
     }
+
+    /* Finally query dimensions of screen & map to the bottom of the screen */
+    // int screen_num = DefaultScreen(Xdisplay);
+    // int screen_w = DisplayWidth(Xdisplay, screen_num);
+    // int screen_h = DisplayHeight(Xdisplay, screen_num);
+    // printf("screen_w=%d screen_h=%d\n", screen_w, screen_h);
+
+    // int delta_x, delta_y;
+    // Window child; // ???
+    // XWindowAttributes xwa;
+    // XTranslateCoordinates(Xdisplay, WindowHandle, Xroot, 0, 0, &delta_x, &delta_y, &child );
+    // XGetWindowAttributes(Xdisplay, WindowHandle, &xwa); // Window-relative coordinates
+    // int screen_x = delta_x - xwa.x;
+    // int screen_y = delta_y - xwa.y;
+    // printf("screen_x=%d screen_y=%d\n", screen_x, screen_y);
+
+    unsigned int win_w = (int) ((double) MONITOR_WIDTH * 0.8);
+    unsigned int win_h = 128;
+    int win_x = (MONITOR_WIDTH / 2) - (win_w / 2);
+    int win_y = MONITOR_HEIGHT - win_h;
+    printf("win_w=%d win_h=%d win_x=%d win_y=%d\n", win_w, win_h, win_x, win_y);
+    XMoveResizeWindow(Xdisplay, WindowHandle, win_x, win_y, win_w, win_h);
+    XSync(Xdisplay, False);
+
+
 }
 /*------------------------------------------------------------------------
   Create the OpenGL rendering context
