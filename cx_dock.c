@@ -130,6 +130,7 @@ static Bool WaitForMapNotify(Display *d, XEvent *e, char *arg) {
 }
 
 static Window our_x11_win;
+static Atom del_atom;
 static GLXFBConfig fbconfig;
 static Colormap cmap;
 static int VisData[] = { // Used in GL init calls
@@ -147,6 +148,11 @@ static XVisualInfo* visual;
 static XRenderPictFormat* pictFormat;
 static Window WindowHandle;
 static int win_x, win_y, win_w, win_h; // Dock bounding box
+static GLXContext RenderContext;
+static Window GLXWindowHandle;
+static GLuint texture;
+int const tex_width=256;
+int const tex_height=256;
 static void init_x11_gl_window() {
   int Xscreen = DefaultScreen(Xdisplay);
   Window Xroot = RootWindow(Xdisplay, Xscreen);
@@ -264,24 +270,131 @@ static void init_x11_gl_window() {
   XIfEvent(Xdisplay, &event, WaitForMapNotify, (char*)&WindowHandle);
 
   /* Set the kill atom so we get a message when the user tries to close the window */
-  Atom del_atom;
   if ((del_atom = XInternAtom(Xdisplay, "WM_DELETE_WINDOW", 0)) != None) {
       XSetWMProtocols(Xdisplay, WindowHandle, &del_atom, 1);
   }
+
+  /* See if we can do OpenGL on this visual */
+  int dummy;
+  if (!glXQueryExtension(Xdisplay, &dummy, &dummy)) {
+    die("OpenGL not supported by X server\n");
+  }
+
+  /* Create the OpenGL rendering context */
+  RenderContext = glXCreateNewContext(Xdisplay, fbconfig, GLX_RGBA_TYPE, 0, True);
+  if (!RenderContext) {
+    die("Failed to create a GL context\n");
+  }
+
+  GLXWindowHandle = glXCreateWindow(Xdisplay, fbconfig, WindowHandle, NULL);
+
+  /* Make it current */
+  if (!glXMakeContextCurrent(Xdisplay, GLXWindowHandle, GLXWindowHandle, RenderContext)) {
+    die("glXMakeCurrent failed for window\n");
+  }
+
+  glGenTextures(1, &texture);
+  glBindTexture(GL_TEXTURE_2D, texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex_width, tex_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
 
 }
 
 static void setup_shared_memory_for_rw_pixels() {
   // XShmGetImage / XShmPutImage
+
 }
 
 static volatile bool exit_flag;
 static void do_render_loop() {
   exit_flag = false;
+
   printf("Beginning render loop...\n");
+  
+  int render_i = 0;
+  XEvent event;
+  XConfigureEvent *xc;
+  bool window_moved_by_user = false;
+
+  float const light_dir[]={1,1,1,0};
+  float const light_color[]={1,0.95,0.9,1};
+
   while (!exit_flag) {
-    // TODO
+    // Book keeping
+    if (render_i > 10000000) {
+      render_i = 0;
+    }
+    // Force window to be at the right location
+    if (window_moved_by_user || render_i % 100 == 0) {
+      XMoveResizeWindow(Xdisplay, WindowHandle, win_x, win_y, win_w, win_h);
+      XSync(Xdisplay, False);
+    }
+
+    // Check all new X11 messages
+    while (XPending(Xdisplay))
+    {
+        XNextEvent(Xdisplay, &event);
+        switch (event.type)
+        {
+          case ClientMessage:
+              if (event.xclient.data.l[0] == del_atom) {
+                  exit_flag = true;
+              }
+          break;
+
+          case ConfigureNotify:
+              xc = &(event.xconfigure);
+              // xc->width; xc->height;
+              window_moved_by_user = true;
+              break;
+        }
+    }
+
+    // Re-draw window using GL commands
+    {
+      int size;
+      static float a=0;
+      static float b=0;
+      static float c=0;
+
+      glViewport(0,0,win_w,win_h);
+
+      /* Clear the screen */
+      // glClearColor(0.750,0.750,1.0,0.5);
+      glClearColor(0.0,0.0,0.0,0.);
+      glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      gluPerspective(45, (float)win_w/(float)win_h, 1, 10);
+
+      glMatrixMode(GL_MODELVIEW);
+      glLoadIdentity();
+
+
+      glEnable(GL_DEPTH_TEST);
+      glDisable(GL_CULL_FACE);
+
+      glLightfv(GL_LIGHT0, GL_POSITION, light_dir);
+      glLightfv(GL_LIGHT0, GL_DIFFUSE, light_color);
+
+      glTranslatef(0,0,-5);
+
+      glRotatef(a, 1, 0, 0);
+      glRotatef(b, 0, 1, 0);
+      glRotatef(c, 0, 0, 1);
+
+      glEnable(GL_LIGHT0);
+      glEnable(GL_LIGHTING);
+      glutSolidTeapot(1);
+
+      a=fmod(a+0.1, 360.);
+      b=fmod(b+0.5, 360.);
+      c=fmod(c+0.25, 360.);
+
+      /* Swapbuffers */
+      glXSwapBuffers(Xdisplay, GLXWindowHandle);
+    }
 
   }
   printf("\nExiting render loop...\n");
@@ -297,6 +410,9 @@ int main(int argc, char** argv) {
 
   init_user_home_dir();
   print_i3_wm_warnings();
+  
+  glutInit(&argc, argv); // Must be called before GL commands issued
+
   init_x11_disp();
   ensure_compositor_running();
   init_xrandr_assign_first_dpy_width_height();
