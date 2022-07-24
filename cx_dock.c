@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
+#include <x86intrin.h>
 
 // Linux headers
 #include <unistd.h>
@@ -336,19 +337,26 @@ static void render_one_frame() {
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 
+  //GLfloat top_inset_px = (int) __rdtsc() % 240; // Testing
+  GLfloat top_inset_px = 120;
   GLfloat polygon_verticies[] = {
-    20, 100, 0,
-    100, 100, 0,
-    500, 50, 0,
-    320, 10, 0,
-    40, 40, 0
+    top_inset_px, win_h, 0, // Top-left
+    0, 0, 0, // Bottom-left
+    win_w, 0, 0, // Bottom-right
+    win_w-top_inset_px, win_h, 0, // Top-right
   };
+  // GLfloat polygon_verticies[] = {
+  //   0, 60, 0, // Top-left
+  //   0, 10, 0, // Bottom-left
+  //   50, 10, 0, // Bottom-right
+  //   50, 60, 0, // Top-right
+  // };
 
   glEnableClientState(GL_VERTEX_ARRAY);
 
   glVertexPointer(3 /* how many dimensions? */, GL_FLOAT, 0, polygon_verticies);
 
-  glDrawArrays(GL_POLYGON, 0, 5 /* len of polygon_verticies / dimensions */);
+  glDrawArrays(GL_POLYGON, 0, 4 /* len of polygon_verticies / dimensions */);
 
   glDisableClientState(GL_VERTEX_ARRAY);
 
@@ -367,9 +375,19 @@ static void do_render_loop() {
   XEvent event;
   XConfigureEvent *xc;
   bool window_moved_by_user = false;
+  unsigned long last_cpu_ts = 0;
+  int render_i_at_last_ts = 0;
 
   while (!exit_flag) {
+    // Display stats
+    unsigned long this_cpu_ts = __rdtsc();
+    if (this_cpu_ts - last_cpu_ts > 1000000000) { // every billion CPU timestamps... (roughly once a second)
+      printf("loops/s = %d\n", (render_i - render_i_at_last_ts) );
+      last_cpu_ts = this_cpu_ts;
+      render_i_at_last_ts = render_i;
+    }
     // Book keeping
+    render_i += 1;
     if (render_i > 10000000) {
       render_i = 0;
     }
