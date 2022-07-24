@@ -25,6 +25,8 @@
 #include <sys/shm.h>
 
 // GL & X11 headers
+#define GL_GLEXT_PROTOTYPES 1
+#define GL3_PROTOTYPES 1
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glut.h>
@@ -304,11 +306,11 @@ static void init_x11_gl_window() {
 
 }
 
-// Bits-per-pixel?
+// Bytes-per-pixel?
 #define BPP    4
 static XShmSegmentInfo shm_shminfo;
 static XImage*  shm_ximage;
-static unsigned char* shm_data ; // will point to the image's BGRA packed pixels
+static unsigned char* shm_data; // will point to the image's BGRA packed pixels
 
 static void setup_shared_memory_for_rw_pixels() {
   shm_shminfo.shmaddr =  (char*) -1; // wat? why?
@@ -328,8 +330,8 @@ static void setup_shared_memory_for_rw_pixels() {
       die("Cannot shmat\n");
   }
 
-  shm_data = (unsigned int*) shm_shminfo.shmaddr;
-  shm_shminfo.readOnly = false;
+  shm_data = (unsigned char*) shm_shminfo.shmaddr;
+  shm_shminfo.readOnly = true;
 
   // Mark the shared memory segment for removal
   // It will be removed even if this program crashes
@@ -337,9 +339,11 @@ static void setup_shared_memory_for_rw_pixels() {
 
   // Allocate the memory needed for the XImage structure
   shm_ximage = XShmCreateImage(Xdisplay,
-    XDefaultVisual( Xdisplay, XDefaultScreen( Xdisplay ) ),
+    XDefaultVisual(Xdisplay, XDefaultScreen(Xdisplay)),
     DefaultDepth(Xdisplay, XDefaultScreen(Xdisplay)),
-    ZPixmap, 0, &shm_shminfo, 0, 0
+    ZPixmap, // memory laid out in RGB triplets
+    shm_data, // data* pointer, null means ???
+    &shm_shminfo, dpy_width, dpy_height
   );
   if (!shm_ximage) {
       die("Could not allocate the XImage structure\n");
@@ -357,6 +361,7 @@ static void setup_shared_memory_for_rw_pixels() {
 
 const float light_dir[] = {1,1,1,0};
 const float light_color[] = {1,0.95,0.9,1};
+static GLuint texture_vbo; // Initialized in do_render_loop();
 static void render_one_frame() {
   glViewport(0,0,win_w,win_h);
 
@@ -398,27 +403,31 @@ static void render_one_frame() {
     win_w, 0, 0, // Bottom-right
     win_w-top_inset_px, win_h, 0, // Top-right
   };
-  // GLfloat polygon_verticies[] = {
-  //   0, 60, 0, // Top-left
-  //   0, 10, 0, // Bottom-left
-  //   50, 10, 0, // Bottom-right
-  //   50, 60, 0, // Top-right
-  // };
 
   glEnableClientState(GL_VERTEX_ARRAY);
 
   glVertexPointer(3 /* how many dimensions? */, GL_FLOAT, 0, polygon_verticies);
 
+  // https://registry.khronos.org/OpenGL-Refpages/gl4/html/glTexImage2D.xhtml
+  glBindBuffer(GL_ARRAY_BUFFER, texture_vbo);
+  
+  glEnable(GL_TEXTURE_2D);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA4, dpy_width, dpy_height, 0, GL_BGRA_INTEGER,  GL_UNSIGNED_BYTE, shm_data);
+  //glBindTexture(GL_TEXTURE_2D, 0);
+
   glDrawArrays(GL_POLYGON, 0, 4 /* len of polygon_verticies / dimensions */);
 
-  glDisableClientState(GL_VERTEX_ARRAY);
 
+  glDisable(GL_TEXTURE_2D);
+
+  glDisableClientState(GL_VERTEX_ARRAY);
 
   /* Swapbuffers */
   glXSwapBuffers(Xdisplay, GLXWindowHandle);
 }
 
 static volatile bool exit_flag;
+//static GLuint texture_vbo;
 static void do_render_loop() {
   exit_flag = false;
 
@@ -430,6 +439,9 @@ static void do_render_loop() {
   bool window_moved_by_user = false;
   unsigned long last_cpu_ts = 0;
   int render_i_at_last_ts = 0;
+
+  // GL texture init, used by render_one_frame();
+  //glGenBuffers(1, &texture_vbo); // Generate 1 buffer
 
   while (!exit_flag) {
     // Display stats
