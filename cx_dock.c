@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/shm.h>
 
 // GL & X11 headers
 #include <GL/gl.h>
@@ -29,6 +30,7 @@
 #include <GL/glut.h>
 #include <GL/glx.h>
 #include <X11/Xatom.h>
+#include <X11/Xutil.h>
 #include <X11/extensions/Xrender.h>
 #include <X11/extensions/Xrandr.h>
 #include <X11/extensions/XShm.h>
@@ -203,7 +205,8 @@ static void init_x11_gl_window() {
 
 
   win_w = ((double) dpy_width * 0.75);
-  win_h = 128;
+  win_h = 128; // Debugging graphics is easire when everything's bigger
+  //win_h = 98; // MacOS uses 96 a ton
   win_x = (dpy_width/2) - (win_w/2);
   win_y = dpy_height - win_h;
 
@@ -301,8 +304,54 @@ static void init_x11_gl_window() {
 
 }
 
+// Bits-per-pixel?
+#define BPP    4
+static XShmSegmentInfo shm_shminfo;
+static XImage*  shm_ximage;
+static unsigned char* shm_data ; // will point to the image's BGRA packed pixels
+
 static void setup_shared_memory_for_rw_pixels() {
-  // XShmGetImage / XShmPutImage
+  shm_shminfo.shmaddr =  (char*) -1; // wat? why?
+  shm_ximage = NULL;
+  if (!XShmQueryExtension(Xdisplay)) {
+    die("Refusing to run without the XShm extension (we didn't code for the slow case, please find/build a better x11 server.)");
+  }
+  // Create a shared memory area 
+  shm_shminfo.shmid = shmget(IPC_PRIVATE, dpy_width * dpy_height * BPP, IPC_CREAT | 0600);
+  if (shm_shminfo.shmid == -1) {
+      die("Cannot shmget\n");
+  }
+
+  // Map the shared memory segment into the address space of this process
+  shm_shminfo.shmaddr = (char *) shmat(shm_shminfo.shmid, 0, 0);
+  if (shm_shminfo.shmaddr == (char *) -1) {
+      die("Cannot shmat\n");
+  }
+
+  shm_data = (unsigned int*) shm_shminfo.shmaddr;
+  shm_shminfo.readOnly = false;
+
+  // Mark the shared memory segment for removal
+  // It will be removed even if this program crashes
+  shmctl(shm_shminfo.shmid, IPC_RMID, 0);
+
+  // Allocate the memory needed for the XImage structure
+  shm_ximage = XShmCreateImage(Xdisplay,
+    XDefaultVisual( Xdisplay, XDefaultScreen( Xdisplay ) ),
+    DefaultDepth(Xdisplay, XDefaultScreen(Xdisplay)),
+    ZPixmap, 0, &shm_shminfo, 0, 0
+  );
+  if (!shm_ximage) {
+      die("Could not allocate the XImage structure\n");
+  }
+
+  shm_ximage->data = (char*) shm_data ;
+  shm_ximage->width = dpy_width;
+  shm_ximage->height = dpy_height;
+
+  // Ask the X server to attach the shared memory segment and sync
+  XShmAttach(Xdisplay, &shm_shminfo );
+  XSync(Xdisplay, false);
 
 }
 
@@ -338,7 +387,11 @@ static void render_one_frame() {
   glLoadIdentity();
 
   //GLfloat top_inset_px = (int) __rdtsc() % 240; // Testing
-  GLfloat top_inset_px = 120;
+  // Measured from 3rdparty-research/mavericks_dock_minimized.png:
+  // For a dock of height 96px, inset was 56px. Therefore we compute
+  // top_inset_px = ((win_h * 56)/96); if win_h==96 we get 56, and it scales
+  // with the window height.
+  GLfloat top_inset_px = ((win_h * 56)/96);
   GLfloat polygon_verticies[] = {
     top_inset_px, win_h, 0, // Top-left
     0, 0, 0, // Bottom-left
