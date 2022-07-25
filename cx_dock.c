@@ -362,6 +362,7 @@ static void setup_shared_memory_for_rw_pixels() {
 const float light_dir[] = {1,1,1,0};
 const float light_color[] = {1,0.95,0.9,1};
 static GLuint texture_vbo; // Initialized in do_render_loop();
+static GLuint texture_text; // Initialized in do_render_loop();
 static void render_one_frame() {
   glViewport(0,0,win_w,win_h);
 
@@ -408,14 +409,59 @@ static void render_one_frame() {
 
   glVertexPointer(3 /* how many dimensions? */, GL_FLOAT, 0, polygon_verticies);
 
-  // https://registry.khronos.org/OpenGL-Refpages/gl4/html/glTexImage2D.xhtml
-  glBindBuffer(GL_ARRAY_BUFFER, texture_vbo);
-  
   glEnable(GL_TEXTURE_2D);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA4, dpy_width, dpy_height, 0, GL_BGRA_INTEGER,  GL_UNSIGNED_BYTE, shm_data);
+  
+  // https://riptutorial.com/opengl/example/11967/basics-of-texturing
+  glBindTexture(GL_TEXTURE_2D, texture_text);
+
+  // Assign "image" to texture object
+
+  // for (int y=0; y<dpy_height; y+=1) {
+  //   for (int x=0; x<dpy_width; x+=1) {
+  //     shm_data[(y * dpy_height) + x] = 0; // black image?
+  //   }
+  // }
+
+  // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, dpy_width, dpy_height, 0, GL_RGB, GL_UNSIGNED_BYTE, shm_data);
+
+  unsigned int text_texture_w = 90;
+  unsigned int text_texture_h = 90;
+  unsigned char test_texture_rgb_red[text_texture_w * text_texture_h * 3];
+  for (int y=0; y<text_texture_h; y+=1) {
+    for (int x=0; x<text_texture_w; x+=1) {
+      if (x % 2 == 0) {
+        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 255; // Red
+        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 0; // Green
+        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 0; // Blue
+      }
+      else {
+        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 0; // Red
+        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 255; // Green
+        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 0; // Blue
+      }
+    }
+  }
+
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, text_texture_w, text_texture_h, 0, GL_RGB, GL_UNSIGNED_BYTE, test_texture_rgb_red);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); // See http://forum.lwjgl.org/index.php?topic=6143.0
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+  //glBindTexture(GL_TEXTURE_2D, 0); // unbind texture_text
+  
+  // https://registry.khronos.org/OpenGL-Refpages/gl4/html/glTexImage2D.xhtml
+  //glBindBuffer(GL_ARRAY_BUFFER, texture_vbo);
+
+  //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA4, dpy_width, dpy_height, 0, GL_BGRA_INTEGER,  GL_UNSIGNED_BYTE, shm_data);
   //glBindTexture(GL_TEXTURE_2D, 0);
 
-  glDrawArrays(GL_POLYGON, 0, 4 /* len of polygon_verticies / dimensions */);
+  glBindTexture(GL_TEXTURE_2D, texture_text); // Must always bind before draw calls
+
+  glDrawArrays(GL_POLYGON, 0, 4); // Begin & end indexes into polygon_verticies[] to be drawn as a single polygon
+  
 
 
   glDisable(GL_TEXTURE_2D);
@@ -427,7 +473,6 @@ static void render_one_frame() {
 }
 
 static volatile bool exit_flag;
-//static GLuint texture_vbo;
 static void do_render_loop() {
   exit_flag = false;
 
@@ -441,7 +486,8 @@ static void do_render_loop() {
   int render_i_at_last_ts = 0;
 
   // GL texture init, used by render_one_frame();
-  //glGenBuffers(1, &texture_vbo); // Generate 1 buffer
+  glGenBuffers(1, &texture_vbo); // Generate 1 buffer
+  glGenTextures(1, &texture_text); // Generate 1 texture
 
   while (!exit_flag) {
     // Display stats
