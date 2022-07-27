@@ -2,7 +2,7 @@ all: cx-dock
 
 cx-dock: cx_dock.c
 	gcc -o cx-dock \
-		-O3 \
+		-O2 \
 		-lm \
 		$(shell pkg-config --cflags --libs x11 gl glu glut xrender xrandr xext) \
 		cx_dock.c

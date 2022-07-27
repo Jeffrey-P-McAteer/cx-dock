@@ -407,7 +407,7 @@ static void render_one_frame() {
 
   glEnableClientState(GL_VERTEX_ARRAY);
 
-  glVertexPointer(3 /* how many dimensions? */, GL_FLOAT, 0, polygon_verticies);
+  //glVertexPointer(3 /* how many dimensions? */, GL_FLOAT, 0, polygon_verticies);
 
   glEnable(GL_TEXTURE_2D);
   
@@ -422,33 +422,38 @@ static void render_one_frame() {
   //   }
   // }
 
-  // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, dpy_width, dpy_height, 0, GL_RGB, GL_UNSIGNED_BYTE, shm_data);
+  //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, dpy_width, dpy_height, 0, GL_RGB, GL_UNSIGNED_BYTE, shm_data);
 
-  unsigned int text_texture_w = 90;
-  unsigned int text_texture_h = 90;
+  unsigned int text_texture_w = 10;
+  unsigned int text_texture_h = 10;
   unsigned char test_texture_rgb_red[text_texture_w * text_texture_h * 3];
   for (int y=0; y<text_texture_h; y+=1) {
     for (int x=0; x<text_texture_w; x+=1) {
-      if (x % 2 == 0) {
-        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 255; // Red
-        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 0; // Green
-        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 0; // Blue
+      if (x <= (text_texture_w/2) && y <= (text_texture_h/2)) {
+        test_texture_rgb_red[(((y * text_texture_w) + x) * 3) + 0] = 255; // Red
+        test_texture_rgb_red[(((y * text_texture_w) + x) * 3) + 1] = 0; // Green
+        test_texture_rgb_red[(((y * text_texture_w) + x) * 3) + 2] = 0; // Blue
       }
       else {
-        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 0; // Red
-        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 255; // Green
-        test_texture_rgb_red[(((y * text_texture_h) + x) * 3) + 0] = 0; // Blue
+        test_texture_rgb_red[(((y * text_texture_w) + x) * 3) + 0] = 0; // Red
+        test_texture_rgb_red[(((y * text_texture_w) + x) * 3) + 1] = 255; // Green
+        test_texture_rgb_red[(((y * text_texture_w) + x) * 3) + 2] = 0; // Blue
       }
     }
   }
 
+  // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+  // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); // See http://forum.lwjgl.org/index.php?topic=6143.0
+  // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // See http://forum.lwjgl.org/index.php?topic=6143.0
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, text_texture_w, text_texture_h, 0, GL_RGB, GL_UNSIGNED_BYTE, test_texture_rgb_red);
-
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); // See http://forum.lwjgl.org/index.php?topic=6143.0
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   //glBindTexture(GL_TEXTURE_2D, 0); // unbind texture_text
   
@@ -460,9 +465,30 @@ static void render_one_frame() {
 
   glBindTexture(GL_TEXTURE_2D, texture_text); // Must always bind before draw calls
 
-  glDrawArrays(GL_POLYGON, 0, 4); // Begin & end indexes into polygon_verticies[] to be drawn as a single polygon
+  //glDrawArrays(GL_POLYGON, 0, 4); // Begin & end indexes into polygon_verticies[] to be drawn as a single polygon
   
 
+  // GLfloat vertices[] = {-1, -1, 0, // bottom left corner
+  //                       -1,  1, 0, // top left corner
+  //                        1,  1, 0, // top right corner
+  //                        1, -1, 0}; // bottom right corner
+  GLuint vertexBufferID;
+  glGenBuffers(1, &vertexBufferID);
+  glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(polygon_verticies), polygon_verticies, GL_STATIC_DRAW);
+
+  glVertexPointer(3, GL_FLOAT, 0, polygon_verticies);
+  
+  GLubyte indices[] = {0,1,2, // first triangle (bottom left - top left - top right)
+                       0,2,3}; // second triangle (bottom left - top right - bottom right)
+  
+  GLuint indexBufferID;
+  glGenBuffers(1, &indexBufferID);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferID);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, indices);
+  //glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 
   glDisable(GL_TEXTURE_2D);
 
