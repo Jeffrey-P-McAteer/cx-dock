@@ -1,15 +1,15 @@
 
-# C X11 Dock (CX-Dock)
+# ~~C~~ Rust X11 Dock (~~CX-Dock~~ RX-Dock)
 
 # Build
 
 ```bash
-make all
+cargo build --release
 ```
 
 # Run
 
 ```bash
-make run
+cargo run --release
 ```
 
