@@ -26,6 +26,9 @@ fn main() {
 
   let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
+  //println!("display.get_max_viewport_dimensions() = {:?}", display.get_max_viewport_dimensions());
+  println!("display.get_max_viewport_dimensions() = {:?}", display.get_max_viewport_dimensions());
+
   #[derive(Copy, Clone)]
   struct Vertex {
       position: [f32; 2],
@@ -33,9 +36,9 @@ fn main() {
 
   glium::implement_vertex!(Vertex, position);
 
-  let vertex1 = Vertex { position: [-0.5, -0.5] };
-  let vertex2 = Vertex { position: [ 0.0,  0.5] };
-  let vertex3 = Vertex { position: [ 0.5, -0.25] };
+  let vertex1 = Vertex { position: [ 0.0, 0.0 ] };
+  let vertex2 = Vertex { position: [ 0.0, 1.0] };
+  let vertex3 = Vertex { position: [ 1.0, 0.0] };
   let shape = vec![vertex1, vertex2, vertex3];
 
   let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
@@ -59,10 +62,25 @@ fn main() {
 
   let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
-  let frame_delay = std::time::Duration::from_millis(14);
+  let frame_delay = std::time::Duration::from_millis(18);
   let be_noisy = false;
 
   event_loop.run(move |event, _, control_flow| {
+
+      let gl_win = display.gl_window();
+      let gl_win = gl_win.window();
+      if let Some(current_mon) = gl_win.current_monitor() {
+        let mon_s = current_mon.size();
+        
+        let w = (mon_s.width as f64 * 0.75) as u32;
+        let h = 128 as u32; // 96 for release l8ter
+        let x = ( (mon_s.width/2) - (w/2) ) as i32;
+        let y = ( mon_s.height - h ) as i32;
+
+        gl_win.set_outer_position( glutin::dpi::Position::Physical( glutin::dpi::PhysicalPosition{x: x, y:y} ) );
+        gl_win.set_inner_size( glutin::dpi::Size::Physical( glutin::dpi::PhysicalSize{width: w, height:h} ) );
+      }
+
       //let next_frame_time = std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
       let next_frame_time = std::time::Instant::now() + frame_delay;
       *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
