@@ -3,6 +3,18 @@ use glium;
 
 use glium::{glutin, Surface};
 
+#[derive(Copy, Clone)]
+struct Vertex {
+    position: [f32; 2],
+}
+glium::implement_vertex!(Vertex, position);
+
+fn gen_vertex_shape<T>(display: &glium::Display, shape: Vec<T>) -> (glium::VertexBuffer<T>, glium::index::NoIndices) where T: Copy + glium::Vertex {
+  let vertex_buffer = glium::VertexBuffer::new(display, &shape).unwrap();
+  let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+  (vertex_buffer, indices)
+}
+
 fn main() {
 
   let res = std::process::Command::new("sh")
@@ -29,20 +41,58 @@ fn main() {
   //println!("display.get_max_viewport_dimensions() = {:?}", display.get_max_viewport_dimensions());
   println!("display.get_max_viewport_dimensions() = {:?}", display.get_max_viewport_dimensions());
 
-  #[derive(Copy, Clone)]
-  struct Vertex {
-      position: [f32; 2],
-  }
+  // Coordinates: float, -1.0,-1.0 is lower-left-most corner, 1.0, 1.0 is upper-right-most corner
+  // Scales to match window dimensions, which currently is a fixed fraction of monitor size.
+  let top_offset = 0.1;
+  let shapes: Vec<(glium::VertexBuffer<Vertex>, glium::index::NoIndices)> = vec![
+    gen_vertex_shape(&display, vec![
+      // Left-most side
+      Vertex { position: [ -1.0, -1.0 ] },
+      Vertex { position: [ -1.0 + top_offset, 1.0 ] },
+      Vertex { position: [ -1.0, -1.0 ] },
+    ]),
+    // gen_vertex_shape(&display, vec![
+    //   // Upper-left center rectangle triangle
+    //   Vertex { position: [ -1.0 + top_offset, -1.0 ] },
+    //   Vertex { position: [ -1.0 + top_offset, 1.0 ] },
+    //   Vertex { position: [ 1.0 - top_offset, 1.0 ] },
+    // ]),
+    gen_vertex_shape(&display, vec![
+      // Bottom-Right center rectangle triangle
+      Vertex { position: [ -1.0 + top_offset, -1.0 ] },
+      Vertex { position: [ 1.0 - top_offset, 1.0 ] },
+      Vertex { position: [ 1.0 - top_offset, -1.0 ] },
+    ]),
+    gen_vertex_shape(&display, vec![
+      // Right-most side
+      Vertex { position: [ 1.0, -1.0 ] },
+      Vertex { position: [ 1.0 - top_offset, 1.0 ] },
+      Vertex { position: [ 1.0, -1.0 ] },
+    ]),
+  ];
+  // let shape = vec![
+  //   // Left-most side
+  //   Vertex { position: [ -1.0, -0.9 ] },
+  //   Vertex { position: [ -1.0 + top_offset, 0.9 ] },
+  //   Vertex { position: [ -1.0, -0.9 ] },
 
-  glium::implement_vertex!(Vertex, position);
+  //   // Upper-left center rectangle triangle
+  //   Vertex { position: [ -1.0 + top_offset, -1.0 ] },
+  //   Vertex { position: [ -1.0 + top_offset, 1.0 ] },
+  //   Vertex { position: [ 1.0 - top_offset, 1.0 ] },
+  //   // Bottom-Right center rectangle triangle
+  //   Vertex { position: [ -1.0 + top_offset, -1.0 ] },
+  //   Vertex { position: [ 1.0 - top_offset, 1.0 ] },
+  //   Vertex { position: [ 1.0 - top_offset, -1.0 ] },
 
-  let vertex1 = Vertex { position: [ 0.0, 0.0 ] };
-  let vertex2 = Vertex { position: [ 0.0, 1.0] };
-  let vertex3 = Vertex { position: [ 1.0, 0.0] };
-  let shape = vec![vertex1, vertex2, vertex3];
+  //   // Right-most side
+  //   // Vertex { position: [ 1.0, -1.0 ] },
+  //   // Vertex { position: [ 1.0 - top_offset, 1.0 ] },
+  //   // Vertex { position: [ 1.0, -1.0 ] },
+  // ];
 
-  let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
-  let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+  // let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
+  // let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
   let vertex_shader_src = r#"
       #version 140
@@ -122,8 +172,10 @@ fn main() {
       
       target.clear_color(0.0, 0.0, 0.0, 0.0);
 
-      target.draw(&vertex_buffer, &indices, &program, &glium::uniforms::EmptyUniforms,
-                  &Default::default()).unwrap();
+      for (vertex_buffer, indices) in shapes.iter() {
+        target.draw(&*vertex_buffer, &*indices, &program, &glium::uniforms::EmptyUniforms,
+                    &Default::default()).unwrap();
+      }
       
       //println!("Drew stuff!");
 
