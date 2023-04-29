@@ -104,6 +104,9 @@ fn main() {
 
   let fragment_shader_src = r#"
       #version 140
+      
+      in vec3 world_rgb[];
+
       out vec4 color;
       void main() {
           color = vec4(1.0, 0.0, 0.0, 1.0);
@@ -189,7 +192,7 @@ fn main() {
         if std::time::Instant::now() >= next_frame_time {
           break;
         }
-        std::thread::sleep( next_frame_time - std::time::Instant::now() ); // cheating b/c we saw 100% cpu use
+        std::thread::sleep( (next_frame_time - std::time::Instant::now()) / 2 ); // cheating b/c we saw 100% cpu use
       }
       
 
@@ -214,6 +217,9 @@ fn main() {
       frame_draw_total_work_time += std::time::Instant::now() - last_frame_begin_time;
 
       if frame_i % num_frames_to_count == 0 {
+        
+        have_set_win_pos = false; // periodically reset window location, but not on _every_ loop
+
         let per_frame_draw_ms = frame_draw_total_work_time.as_millis() as f64 / num_frames_to_count as f64;
         println!("{} frames took {} ms total to draw, or {} ms/frame", num_frames_to_count, frame_draw_total_work_time.as_millis(), per_frame_draw_ms);
         frame_draw_total_work_time = std::time::Duration::from_millis(0);
