@@ -7,3 +7,7 @@ edition = "2021"
 
 [dependencies]
 glium = "*"
+
+
+[profile.release]
+debug = true

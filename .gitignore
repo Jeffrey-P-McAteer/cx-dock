@@ -4,8 +4,9 @@ bin/
 __pycache__/
 cx-dock
 CX-Dock
-
-
+flamegraph.svg
+perf*
+*.data
 
 # Added by cargo
 

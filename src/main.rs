@@ -112,29 +112,45 @@ fn main() {
 
   let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
-  let frame_delay = std::time::Duration::from_millis(18);
+  let frame_delay = std::time::Duration::from_millis(32);
+  let mut last_frame_begin_time = std::time::Instant::now();
   let be_noisy = false;
+
+  let mut have_set_win_pos = false;
+
+  let mut frame_i = 0;
+  let num_frames_to_count = 32; // approx 1sec worth of frames
+  let mut frame_draw_total_work_time = std::time::Duration::from_millis(0);
 
   event_loop.run(move |event, _, control_flow| {
 
-      let gl_win = display.gl_window();
-      let gl_win = gl_win.window();
-      if let Some(current_mon) = gl_win.current_monitor() {
-        let mon_s = current_mon.size();
-        
-        let w = (mon_s.width as f64 * 0.75) as u32;
-        let h = 128 as u32; // 96 for release l8ter
-        let x = ( (mon_s.width/2) - (w/2) ) as i32;
-        let y = ( mon_s.height - h ) as i32;
+    if ! have_set_win_pos {
+        let gl_win = display.gl_window();
+        let gl_win = gl_win.window();
+        if let Some(current_mon) = gl_win.current_monitor() {
+          let mon_s = current_mon.size();
+          
+          let w = (mon_s.width as f64 * 0.75) as u32;
+          let h = 128 as u32; // 96 for release l8ter
+          let x = ( (mon_s.width/2) - (w/2) ) as i32;
+          let y = ( mon_s.height - h ) as i32;
 
-        gl_win.set_outer_position( glutin::dpi::Position::Physical( glutin::dpi::PhysicalPosition{x: x, y:y} ) );
-        gl_win.set_inner_size( glutin::dpi::Size::Physical( glutin::dpi::PhysicalSize{width: w, height:h} ) );
+          gl_win.set_outer_position( glutin::dpi::Position::Physical( glutin::dpi::PhysicalPosition{x: x, y:y} ) );
+          gl_win.set_inner_size( glutin::dpi::Size::Physical( glutin::dpi::PhysicalSize{width: w, height:h} ) );
+
+          have_set_win_pos = true;
+
+        }
       }
 
-      //let next_frame_time = std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
-      let next_frame_time = std::time::Instant::now() + frame_delay;
-      *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
+      frame_i += 1;
 
+      //let next_frame_time = std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
+      let next_frame_time = last_frame_begin_time + frame_delay;
+
+      // WaitUntil returns early if we get an event, which is common!
+      // We loop until std::time::Instant::now() > next_frame_time
+      *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
       match event {
           glutin::event::Event::WindowEvent { event, .. } => match event {
               glutin::event::WindowEvent::CloseRequested => {
@@ -168,6 +184,18 @@ fn main() {
           },
       }
 
+      loop {
+        *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time); // hopefully an efficient wait and not just CPU spinning...
+        if std::time::Instant::now() >= next_frame_time {
+          break;
+        }
+        std::thread::sleep( next_frame_time - std::time::Instant::now() ); // cheating b/c we saw 100% cpu use
+      }
+      
+
+      last_frame_begin_time = std::time::Instant::now();
+
+
       let mut target = display.draw();
       
       target.clear_color(0.0, 0.0, 0.0, 0.0);
@@ -181,6 +209,14 @@ fn main() {
 
       if let Err(e) = target.finish() {
         println!("target.finish() e={:?}", e);
+      }
+
+      frame_draw_total_work_time += std::time::Instant::now() - last_frame_begin_time;
+
+      if frame_i % num_frames_to_count == 0 {
+        let per_frame_draw_ms = frame_draw_total_work_time.as_millis() as f64 / num_frames_to_count as f64;
+        println!("{} frames took {} ms total to draw, or {} ms/frame", num_frames_to_count, frame_draw_total_work_time.as_millis(), per_frame_draw_ms);
+        frame_draw_total_work_time = std::time::Duration::from_millis(0);
       }
 
   });
